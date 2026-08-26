@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kilix-piper-tts"
+version = "0.1.0"
+description = "Sandboxed persistent Piper speech provider for Kilix"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [
+  {name = "itsmygithubacct", email = "itsmygithubacct@users.noreply.github.com"},
+]
+dependencies = [
+  "piper-tts==1.7.0",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Typing :: Typed",
+]
+
+[project.scripts]
+kilix-piper-tts = "kilix_piper_tts.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+kilix_piper_tts = ["py.typed"]
