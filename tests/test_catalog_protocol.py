@@ -29,6 +29,26 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(len(artifact.sha256), 64)
             int(artifact.sha256, 16)
 
+    def test_female02_artifacts_are_the_kilix_voice_release(self) -> None:
+        self.assertEqual(catalog.FEMALE_02.checkpoint, 80)
+        self.assertEqual(
+            tuple((item.filename, item.size, item.sha256, item.url) for item in catalog.FEMALE_02.artifacts),
+            (
+                (
+                    "kilix-female-02.onnx",
+                    63_522_221,
+                    "263beafc9e5fa759878294e7c45bb3639d930075c845ea96c71331edeeb86d61",
+                    "https://github.com/itsmygithubacct/kilix-voice/releases/download/kilix-female-02-epoch80/kilix-female-02.onnx",
+                ),
+                (
+                    "kilix-female-02.onnx.json",
+                    5_486,
+                    "062ed73be776e0950198aef0171e9f3a1a50ba520b3a0a91ee5a3f11421e43b5",
+                    "https://github.com/itsmygithubacct/kilix-voice/releases/download/kilix-female-02-epoch80/kilix-female-02.onnx.json",
+                ),
+            ),
+        )
+
 
 class ProtocolTests(unittest.TestCase):
     def test_frame_round_trip_preserves_utf8(self) -> None:

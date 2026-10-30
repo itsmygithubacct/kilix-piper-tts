@@ -80,18 +80,32 @@ KRISTIN = ModelSpec(
     ),
 )
 
+FEMALE_02_RELEASE = "kilix-female-02-epoch80"
+_FEMALE_02_URL = (
+    "https://github.com/itsmygithubacct/kilix-voice/releases/download/"
+    f"{FEMALE_02_RELEASE}"
+)
+
 FEMALE_02 = ModelSpec(
     catalog_id="kilix-female-02",
     voice="kilix-female-02",
     sample_rate=22050,
     language="en_US",
     quality="medium",
-    summary="Kilix Female-02 checkpoint 80; local export, unity-gain synthesis",
+    summary="Kilix Female-02 checkpoint 80; unity-gain synthesis",
     artifacts=(
-        Artifact("kilix-female-02.onnx", "", 63_522_221,
-                 "263beafc9e5fa759878294e7c45bb3639d930075c845ea96c71331edeeb86d61"),
-        Artifact("kilix-female-02.onnx.json", "", 5_486,
-                 "062ed73be776e0950198aef0171e9f3a1a50ba520b3a0a91ee5a3f11421e43b5"),
+        Artifact(
+            "kilix-female-02.onnx",
+            f"{_FEMALE_02_URL}/kilix-female-02.onnx",
+            63_522_221,
+            "263beafc9e5fa759878294e7c45bb3639d930075c845ea96c71331edeeb86d61",
+        ),
+        Artifact(
+            "kilix-female-02.onnx.json",
+            f"{_FEMALE_02_URL}/kilix-female-02.onnx.json",
+            5_486,
+            "062ed73be776e0950198aef0171e9f3a1a50ba520b3a0a91ee5a3f11421e43b5",
+        ),
     ),
     checkpoint=80,
 )
@@ -116,6 +130,7 @@ __all__ = [
     "CATALOG_SCHEMA",
     "KRISTIN",
     "FEMALE_02",
+    "FEMALE_02_RELEASE",
     "MODEL_BY_ID",
     "MODEL_ID",
     "MODEL_IDS",
