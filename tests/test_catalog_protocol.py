@@ -8,8 +8,8 @@ from kilix_piper_tts import catalog, protocol
 
 
 class CatalogTests(unittest.TestCase):
-    def test_initial_catalog_is_exactly_kristin(self) -> None:
-        self.assertEqual(catalog.MODEL_IDS, ("piper-en-us-kristin-medium",))
+    def test_named_catalog_preserves_kristin(self) -> None:
+        self.assertEqual(catalog.MODEL_IDS, ("piper-en-us-kristin-medium", "kilix-female-02"))
         model = catalog.KRISTIN
         self.assertEqual(model.voice, "en_US-kristin-medium")
         self.assertEqual(model.sample_rate, 22050)

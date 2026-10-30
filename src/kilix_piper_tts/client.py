@@ -118,7 +118,10 @@ def synthesize(
             pcm = protocol.recv_exact(endpoint, size)
         except EOFError as error:
             raise ClientError("provider closed before sending all PCM audio") from error
-    if response.get("sample_rate") != catalog.SAMPLE_RATE:
+    spec = catalog.get_model(model)
+    if response.get("model") != model or response.get("voice") != spec.voice:
+        raise ClientError("provider returned a different voice than requested")
+    if response.get("sample_rate") != spec.sample_rate:
         raise ClientError("provider returned an unexpected sample rate")
     return pcm, response
 

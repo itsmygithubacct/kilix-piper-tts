@@ -36,6 +36,7 @@ class ModelSpec:
     quality: str
     summary: str
     artifacts: tuple[Artifact, ...]
+    checkpoint: int | None = None
 
     @property
     def download_size(self) -> int:
@@ -79,7 +80,23 @@ KRISTIN = ModelSpec(
     ),
 )
 
-MODELS = (KRISTIN,)
+FEMALE_02 = ModelSpec(
+    catalog_id="kilix-female-02",
+    voice="kilix-female-02",
+    sample_rate=22050,
+    language="en_US",
+    quality="medium",
+    summary="Kilix Female-02 checkpoint 80; local export, unity-gain synthesis",
+    artifacts=(
+        Artifact("kilix-female-02.onnx", "", 63_522_221,
+                 "263beafc9e5fa759878294e7c45bb3639d930075c845ea96c71331edeeb86d61"),
+        Artifact("kilix-female-02.onnx.json", "", 5_486,
+                 "062ed73be776e0950198aef0171e9f3a1a50ba520b3a0a91ee5a3f11421e43b5"),
+    ),
+    checkpoint=80,
+)
+
+MODELS = (KRISTIN, FEMALE_02)
 MODEL_BY_ID = {model.catalog_id: model for model in MODELS}
 MODEL_IDS = tuple(MODEL_BY_ID)
 
@@ -98,6 +115,7 @@ __all__ = [
     "Artifact",
     "CATALOG_SCHEMA",
     "KRISTIN",
+    "FEMALE_02",
     "MODEL_BY_ID",
     "MODEL_ID",
     "MODEL_IDS",

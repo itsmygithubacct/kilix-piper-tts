@@ -90,17 +90,21 @@ class ProviderService:
         self.listener: socket.socket | None = None
         self.socket_identity: tuple[int, int] | None = None
 
-    def _status(self) -> dict:
-        installed, detail = installer.inspect_install(catalog.MODEL_ID)
+    def _status(self, model_id: str = catalog.MODEL_ID) -> dict:
+        model = catalog.get_model(model_id)
+        installed, detail = installer.inspect_install(model_id)
         return {
             "ok": True,
             "version": __version__,
-            "model": catalog.MODEL_ID,
-            "voice": catalog.VOICE_NAME,
-            "sample_rate": catalog.SAMPLE_RATE,
+            "model": model.catalog_id,
+            "voice": model.voice,
+            "sample_rate": model.sample_rate,
+            "checkpoint": model.checkpoint,
+            "model_sha256": model.artifacts[0].sha256,
             "installed": installed,
             "detail": detail,
-            "loaded": self.manager.loaded,
+            "loaded": self.manager.loaded_model == model_id,
+            "loaded_model": self.manager.loaded_model,
             "busy": self.manager.busy,
             "cpu_only": True,
         }
@@ -113,11 +117,11 @@ class ProviderService:
             request = protocol.validate_request(protocol.recv_frame(endpoint))
             self.last_activity = time.monotonic()
             if request["op"] == "status":
-                protocol.send_frame(endpoint, self._status())
+                protocol.send_frame(endpoint, self._status(request.get("model", catalog.MODEL_ID)))
                 return
             endpoint.settimeout(None)
             pcm, sample_rate = self.manager.synthesize(
-                request["text"], request["rate"], endpoint
+                request["text"], request["rate"], endpoint, model=request["model"]
             )
             if len(pcm) > protocol.MAX_PCM_BYTES:
                 raise ServiceError(
@@ -129,7 +133,8 @@ class ProviderService:
                 {
                     "ok": True,
                     "model": request["model"],
-                    "voice": catalog.VOICE_NAME,
+                    "voice": catalog.get_model(request["model"]).voice,
+                    "checkpoint": catalog.get_model(request["model"]).checkpoint,
                     "rate": request["rate"],
                     "sample_rate": sample_rate,
                     "pcm_bytes": len(pcm),

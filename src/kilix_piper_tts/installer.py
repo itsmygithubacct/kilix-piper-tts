@@ -51,7 +51,7 @@ def _sha256(path: str) -> str:
 
 
 def _manifest(model: catalog.ModelSpec) -> dict:
-    return {
+    manifest = {
         "schema": catalog.CATALOG_SCHEMA,
         "model": model.catalog_id,
         "voice": model.voice,
@@ -68,6 +68,11 @@ def _manifest(model: catalog.ModelSpec) -> dict:
             for artifact in model.artifacts
         ],
     }
+    if model.checkpoint is not None:
+        manifest.pop("voice_repository_commit")
+        manifest["checkpoint"] = model.checkpoint
+        manifest["source"] = "local-export"
+    return manifest
 
 
 def inspect_install(
@@ -144,9 +149,20 @@ def install_model(
     catalog_id: str = catalog.MODEL_ID,
     *,
     report: Callable[[str], None] = lambda _message: None,
+    model_file: str | None = None,
+    config_file: str | None = None,
 ) -> tuple[str, bool]:
     """Install one catalogued voice; return (directory, newly_installed)."""
     model = catalog.get_model(catalog_id)
+    local = {}
+    if model_file is not None or config_file is not None:
+        if not model_file or not config_file or len(model.artifacts) != 2:
+            raise InstallError("local installation requires both model and config files for a local-export voice")
+        local = {model.model_filename: model_file, model.config_filename: config_file}
+    if not local and any(not artifact.url for artifact in model.artifacts):
+        # An already installed voice can still be verified idempotently below.
+        if not inspect_install(catalog_id, verify_hashes=True)[0]:
+            raise InstallError("This voice is a local export; supply --model-file and --config-file")
     target = paths.model_dir(model.catalog_id)
     with _install_lock(model):
         if os.path.lexists(target):
@@ -161,16 +177,22 @@ def install_model(
         stage = tempfile.mkdtemp(prefix=f".{model.catalog_id}.stage-", dir=root)
         os.chmod(stage, 0o700)
         try:
-            download = _kilix_download()
+            download = None if local else _kilix_download()
             for artifact in model.artifacts:
                 destination = os.path.join(stage, artifact.filename)
                 try:
-                    download(
-                        artifact.url,
-                        destination,
-                        report=report,
-                        expected_sha256=artifact.sha256,
-                    )
+                    if local:
+                        source = os.open(local[artifact.filename], os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+                        with os.fdopen(source, "rb") as stream:
+                            info = os.fstat(stream.fileno())
+                            if not stat.S_ISREG(info.st_mode) or info.st_size != artifact.size:
+                                raise InstallError(f"{artifact.filename} is not the expected regular export file")
+                            with open(destination, "xb") as output:
+                                shutil.copyfileobj(stream, output, 1024 * 1024)
+                        report(f"Imported {artifact.filename}")
+                    else:
+                        download(artifact.url, destination, report=report,
+                                 expected_sha256=artifact.sha256)
                 except Exception as error:
                     raise InstallError(
                         f"could not install {artifact.filename}: {error}"
@@ -181,6 +203,8 @@ def install_model(
                         f"{artifact.filename} has {actual_size} bytes after download; "
                         f"expected {artifact.size}"
                     )
+                if _sha256(destination) != artifact.sha256:
+                    raise InstallError(f"{artifact.filename} failed SHA-256 verification")
                 os.chmod(destination, 0o600)
                 with open(destination, "rb") as stream:
                     os.fsync(stream.fileno())

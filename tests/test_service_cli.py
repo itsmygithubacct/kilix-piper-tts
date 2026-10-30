@@ -17,9 +17,11 @@ from kilix_piper_tts import catalog, cli, paths, protocol, runtime, service
 
 class FakeManager:
     loaded = True
+    loaded_model = catalog.MODEL_ID
     busy = False
 
-    def synthesize(self, text: str, rate: int, _client) -> tuple[bytes, int]:
+    def synthesize(self, text: str, rate: int, _client, *, model=catalog.MODEL_ID) -> tuple[bytes, int]:
+        self.loaded_model = model
         return (text.encode("utf-8") + bytes([rate % 256])) * 2, 22050
 
     def close(self) -> None:
@@ -72,6 +74,22 @@ class ServiceTests(unittest.TestCase):
         self.assertFalse(response["ok"])
         self.assertEqual(pcm, b"")
         self.assertIn("raw Piper", response["error"])
+
+    def test_female02_reaches_runtime_and_reports_its_identity(self) -> None:
+        with mock.patch.object(FakeManager, "synthesize", return_value=(b"\0\0", 22050)) as synth:
+            response, pcm = self.exchange({"op": "synthesize", "model": "kilix-female-02",
+                                           "text": "Hello", "rate": 170})
+        self.assertEqual(synth.call_args.kwargs["model"], "kilix-female-02")
+        self.assertEqual(response["voice"], "kilix-female-02")
+        self.assertEqual(response["checkpoint"], 80)
+        self.assertEqual(pcm, b"\0\0")
+
+    def test_status_does_not_claim_another_loaded_voice_is_ready(self) -> None:
+        with mock.patch.object(service.installer, "inspect_install", return_value=(True, "verified")):
+            response, _ = self.exchange({"op": "status", "model": "kilix-female-02"})
+        self.assertEqual(response["model"], "kilix-female-02")
+        self.assertFalse(response["loaded"])
+        self.assertEqual(response["loaded_model"], catalog.MODEL_ID)
 
     def test_stale_socket_is_replaced_but_live_service_is_not(self) -> None:
         with tempfile.TemporaryDirectory() as directory, mock.patch.dict(

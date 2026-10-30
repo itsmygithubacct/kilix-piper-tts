@@ -5,11 +5,30 @@ It keeps one Piper model loaded in a short-lived local service, while callers
 send only bounded text, a registered model ID, and a preset speaking rate.
 Callers cannot supply executable paths, model paths, URLs, or Piper phonemes.
 
-The initial catalog deliberately contains one voice:
-`piper-en-us-kristin-medium`. It is Piper's single-speaker
+The catalog includes `kilix-female-02` checkpoint 80 and
+`piper-en-us-kristin-medium`. The latter is Piper's single-speaker
 `en_US-kristin-medium` model at 22,050 Hz. The model, configuration, and model
 card are pinned to one `piper-voices` commit and exact SHA-256 digests. Piper
 1.7.0 is pinned in `uv.lock`; inference is CPU-only.
+
+Female-02 is imported from an existing local export. Its ONNX and JSON hashes
+are pinned in the catalog; a different checkpoint is refused. Importing it
+does not download or modify the training files:
+
+```sh
+kilix-piper-tts install kilix-female-02 \
+  --model-file /absolute/export/voice.onnx \
+  --config-file /absolute/export/voice.onnx.json
+kilix-piper-tts status --model kilix-female-02 --json
+kilix-piper-tts synthesize "Hello from Kilix." \
+  --model kilix-female-02 --output female-02.wav
+```
+
+Female-02 preserves the exported speed scale and uses unity gain without
+per-sentence peak normalization. The service keeps one selected model resident;
+switching voices replaces that worker instead of retaining two models. Status
+identifies the requested voice, checkpoint and model hash. Updating the catalog
+and installed export can advance Female-02 without changing its callers.
 
 ## Install and try it
 

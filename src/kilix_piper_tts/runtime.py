@@ -34,7 +34,7 @@ def _thread_count() -> int:
         return 2
 
 
-def _worker_main(connection: Connection, model_dir: str) -> None:
+def _worker_main(connection: Connection, model_dir: str, model_id: str) -> None:
     """Own Piper and its model in a child that the service can kill safely."""
     try:
         threads = str(_thread_count())
@@ -42,7 +42,7 @@ def _worker_main(connection: Connection, model_dir: str) -> None:
         os.environ.setdefault("OMP_WAIT_POLICY", "PASSIVE")
         from piper import PiperVoice, SynthesisConfig
 
-        model = catalog.KRISTIN
+        model = catalog.get_model(model_id)
         voice = PiperVoice.load(
             os.path.join(model_dir, model.model_filename),
             os.path.join(model_dir, model.config_filename),
@@ -60,7 +60,16 @@ def _worker_main(connection: Connection, model_dir: str) -> None:
                 return
             text = request["text"]
             rate = request["rate"]
-            config = SynthesisConfig(length_scale=170.0 / float(rate))
+            scale = 170.0 / float(rate)
+            if model.checkpoint is not None:
+                # Preserve the export's tuning and raw unity gain. Per-sentence
+                # peak normalization changes the character and loudness.
+                config = SynthesisConfig(
+                    length_scale=voice.config.length_scale * scale,
+                    normalize_audio=False,
+                )
+            else:
+                config = SynthesisConfig(length_scale=scale)
             pieces: list[bytes] = []
             for chunk in voice.synthesize(text, config):
                 if chunk.sample_rate != model.sample_rate:
@@ -98,6 +107,12 @@ class WorkerManager:
         self._process: multiprocessing.Process | None = None
         self._pipe: Connection | None = None
         self._busy = False
+        self._model_id: str | None = None
+
+    @property
+    def loaded_model(self) -> str | None:
+        with self._state_lock:
+            return self._model_id if self._process is not None and self._process.is_alive() else None
 
     @property
     def busy(self) -> bool:
@@ -113,6 +128,7 @@ class WorkerManager:
         with self._state_lock:
             process, self._process = self._process, None
             pipe, self._pipe = self._pipe, None
+            self._model_id = None
         if pipe is not None:
             pipe.close()
         if process is not None:
@@ -153,16 +169,20 @@ class WorkerManager:
                     raise RuntimeError("Piper worker returned an invalid result")
                 return message
 
-    def _ensure_worker(self, client: socket.socket) -> Connection:
+    def _ensure_worker(self, client: socket.socket, model_id: str) -> Connection:
         with self._state_lock:
             process, pipe = self._process, self._pipe
-        if process is not None and pipe is not None and process.is_alive():
+            loaded_model = self._model_id
+        if process is not None and pipe is not None and process.is_alive() and loaded_model == model_id:
             return pipe
         self._drop_worker()
+        installed, detail = installer.inspect_install(model_id, verify_hashes=True)
+        if not installed:
+            raise RuntimeError(detail)
         parent, child = self._context.Pipe(duplex=True)
         process = self._context.Process(
             target=_worker_main,
-            args=(child, paths.model_dir(catalog.MODEL_ID)),
+            args=(child, paths.model_dir(model_id), model_id),
             name="kilix-piper-worker",
             daemon=True,
         )
@@ -176,19 +196,22 @@ class WorkerManager:
         except TimeoutError as error:
             self._drop_worker()
             raise RuntimeError(
-                f"Piper did not load Kristin within {LOAD_TIMEOUT_S:.0f} seconds"
+                f"Piper did not load {model_id} within {LOAD_TIMEOUT_S:.0f} seconds"
             ) from error
         if not message.get("ok") or not message.get("ready"):
             self._drop_worker()
             raise RuntimeError(
-                "Piper could not load Kristin: " + str(message.get("error") or message)
+                f"Piper could not load {model_id}: " + str(message.get("error") or message)
             )
+        with self._state_lock:
+            self._model_id = model_id
         return parent
 
     def synthesize(
-        self, text: str, rate: int, client: socket.socket
+        self, text: str, rate: int, client: socket.socket, *, model: str = catalog.MODEL_ID
     ) -> tuple[bytes, int]:
-        installed, detail = installer.inspect_install(catalog.MODEL_ID)
+        spec = catalog.get_model(model)
+        installed, detail = installer.inspect_install(model)
         if not installed:
             raise RuntimeError(detail)
         while not self._job_lock.acquire(timeout=0.1):
@@ -198,7 +221,7 @@ class WorkerManager:
             with self._state_lock:
                 self._busy = True
             try:
-                pipe = self._ensure_worker(client)
+                pipe = self._ensure_worker(client, model)
                 pipe.send({"op": "synthesize", "text": text, "rate": rate})
                 timeout = SYNTH_TIMEOUT_BASE_S + len(text) * SYNTH_TIMEOUT_PER_CHAR_S
                 try:
@@ -216,7 +239,7 @@ class WorkerManager:
                     )
                 pcm = message.get("pcm")
                 sample_rate = message.get("sample_rate")
-                if not isinstance(pcm, bytes) or sample_rate != catalog.SAMPLE_RATE:
+                if not isinstance(pcm, bytes) or sample_rate != spec.sample_rate:
                     self._drop_worker()
                     raise RuntimeError("Piper worker returned invalid audio metadata")
                 return pcm, sample_rate

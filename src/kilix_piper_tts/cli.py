@@ -22,6 +22,8 @@ def _model_record(model: catalog.ModelSpec, *, verify: bool = False) -> dict:
         "language": model.language,
         "quality": model.quality,
         "sample_rate": model.sample_rate,
+        "checkpoint": model.checkpoint,
+        "local_import": model.checkpoint is not None,
         "download_bytes": model.download_size,
         "installed": installed,
         "detail": detail,
@@ -89,12 +91,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     install = commands.add_parser("install", help="explicitly download one voice")
     install.add_argument("model", nargs="?", default=catalog.MODEL_ID, choices=catalog.MODEL_IDS)
+    install.add_argument("--model-file", help="import a checksum-pinned local ONNX export")
+    install.add_argument("--config-file", help="matching local ONNX JSON configuration")
 
     verify = commands.add_parser("verify", help="hash every installed voice artifact")
     verify.add_argument("model", nargs="?", default=catalog.MODEL_ID, choices=catalog.MODEL_IDS)
 
     status = commands.add_parser("status", help="show installed and running state")
     status.add_argument("--json", action="store_true", dest="as_json")
+    status.add_argument("--model", default=catalog.MODEL_ID, choices=catalog.MODEL_IDS)
 
     serve = commands.add_parser("serve", help="run the private provider in the foreground")
     serve.add_argument("--idle-seconds", type=float, default=300.0)
@@ -132,7 +137,8 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  {record['summary']}; {record['detail']}")
             return 0
         if args.command == "install":
-            directory, created = installer.install_model(args.model, report=print)
+            directory, created = installer.install_model(args.model, report=print,
+                model_file=args.model_file, config_file=args.config_file)
             action = "Installed" if created else "Already installed and verified"
             print(f"{action}: {args.model} at {directory}")
             return 0
@@ -143,7 +149,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Verified {args.model}: {detail}")
             return 0
         if args.command == "status":
-            installed, detail = installer.inspect_install(catalog.MODEL_ID)
+            model = catalog.get_model(args.model)
+            installed, detail = installer.inspect_install(args.model)
             running: dict | None = None
             try:
                 endpoint = client.connect(autostart=False)
@@ -151,16 +158,18 @@ def main(argv: list[str] | None = None) -> int:
                 pass
             else:
                 with endpoint:
-                    protocol.send_frame(endpoint, {"op": "status"})
+                    protocol.send_frame(endpoint, {"op": "status", "model": args.model})
                     running = protocol.recv_frame(endpoint)
             payload = {
                 "version": __version__,
-                "model": catalog.MODEL_ID,
-                "voice": catalog.VOICE_NAME,
+                "model": model.catalog_id,
+                "voice": model.voice,
+                "checkpoint": model.checkpoint,
+                "model_sha256": model.artifacts[0].sha256,
                 "installed": installed,
                 "detail": detail,
                 "running": bool(running and running.get("ok")),
-                "loaded": bool(running and running.get("loaded")),
+                "loaded": bool(running and running.get("model") == args.model and running.get("loaded")),
                 "socket": paths.socket_path(),
             }
             if args.as_json:

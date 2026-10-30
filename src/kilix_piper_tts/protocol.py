@@ -68,6 +68,11 @@ def recv_frame(endpoint: socket.socket) -> dict:
 def validate_request(payload: dict) -> dict:
     op = payload.get("op")
     if op == "status":
+        if "model" in payload:
+            model = payload["model"]
+            if not isinstance(model, str) or model not in catalog.MODEL_IDS:
+                raise ProtocolError("status requires a registered model")
+            return {"op": "status", "model": model}
         return {"op": "status"}
     if op != "synthesize":
         raise ProtocolError("op must be 'synthesize' or 'status'")
