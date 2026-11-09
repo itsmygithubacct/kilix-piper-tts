@@ -5,11 +5,15 @@ It keeps one Piper model loaded in a short-lived local service, while callers
 send only bounded text, a registered model ID, and a preset speaking rate.
 Callers cannot supply executable paths, model paths, URLs, or Piper phonemes.
 
-**Status:** not part of the Plebian-OS image. Kilix fetches and builds a pinned
-commit of this provider in the user's home the first time a Piper voice is
-selected (`kilix tts --enable-kristin`, `kilix tts --tier=neural` or
-`kilix tts --install=kilix-female-02`); the voice files are downloaded then,
-never shipped in the ISO. Kilix for Plebian-OS 0.2.3 pins commit `ad84b296`
+**Status:** the provider's code is not in the Plebian-OS image. Kilix fetches
+and builds a pinned commit of it in the user's home the first time a Piper
+voice is installed (`kilix tts --install=kilix-female-02`,
+`kilix tts --enable-kristin` or `kilix tts --tier=neural`). Kilix 95 runs the
+Female-02 install itself, without a question, when the desktop first starts
+(`kilix wizard install-default-voice`). The 0.2.3 ISO also carries the
+Female-02 files, as a Kilix Content asset in its offline default model bundle;
+Kristin's files are downloaded only when that voice is installed.
+Kilix for Plebian-OS 0.2.3 pins commit `ad84b296`
 from the `work/0.2.2-female02` branch, which adds a download of Female-02 from
 the kilix-voice release; this README describes `main`.
 
@@ -158,8 +162,8 @@ kilix-piper-tts is one of the repositories behind
 install whose desktop is [Kilix](https://github.com/itsmygithubacct/kilix#readme)
 running the [Kilix 95](https://github.com/itsmygithubacct/kilix-95#readme)
 desktop through [Pleb](https://github.com/itsmygithubacct/pleb#readme).
-Kilix installs a pinned commit of it on first use, when a user picks a Piper
-voice. The map of every repository and how it ships is on the
+Kilix installs a pinned commit of it on first use; on Plebian-OS that is the
+first desktop start, when Kilix 95 installs the default Female-02 voice. The map of every repository and how it ships is on the
 [components page](https://github.com/itsmygithubacct/plebian-os/blob/main/docs/components.md).
 
 ## License
